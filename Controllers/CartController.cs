@@ -40,7 +40,7 @@ namespace MyApp.Controllers
             return Ok(cart);
         }
         // Add Product To Cart
-  [HttpPost("AddToCart")]
+[HttpPost("AddToCart")]
 public async Task<IActionResult> AddToCart([FromBody] CartResources cartResources)
 {
     try
@@ -126,6 +126,65 @@ public async Task<IActionResult> AddToCart([FromBody] CartResources cartResource
         return StatusCode(500, "An error occurred while processing your request");
     }
 }
+
+        // Remove Product From Cart
+        [HttpPost("remove/{productId}")]
+        public async Task<IActionResult> RemoveFromCart([FromBody] RemoveResources removeResources)
+        {
+            var userid = GetUserIdByToken();
+            var cart = await _context.Carts
+                .Include(c => c.CartItems)
+                .FirstOrDefaultAsync(c => c.UserId == userid);
+
+            if (cart == null)
+                return NotFound("Cart Not Found");
+
+            var cartitem = cart.CartItems.FirstOrDefault(ci => ci.ProductId == removeResources.ProductId
+            && ci.Size == removeResources.Size);
+            if (cartitem == null)
+                return NotFound("Product Not Found");
+            cart.CartItems.Remove(cartitem);
+            if (!cart.CartItems.Any())
+            {
+                _context.Carts.Remove(cart);
+            }
+            await _context.SaveChangesAsync();
+            return Ok(cart);
+        }
+        // Decrease product quantity
+        [HttpPatch("productquantity/{productid}")]
+        public async Task<IActionResult> DecreaseQuantity([FromBody] RemoveResources removeResources)
+        {
+            var userid = GetUserIdByToken();
+            var cart = await _context.Carts
+            .Include(c => c.CartItems)
+            .ThenInclude(c => c.Products)
+            .FirstOrDefaultAsync(c => c.UserId == userid);
+            if (cart == null)
+            {
+                return NotFound("Cart Not Found");
+            }
+            var cartItems = cart.CartItems.FirstOrDefault(ci => ci.ProductId == removeResources.ProductId && ci.Size == removeResources.Size);
+            if (cartItems == null)
+            {
+                return NotFound("Product Not Found");
+            }
+            if (cartItems.Quantity > 1)
+            {
+                cartItems.Quantity = cartItems.Quantity - 1;
+            }
+            else
+            {
+                cart.CartItems.Remove(cartItems);
+            }
+            if (!cart.CartItems.Any())
+            {
+                _context.Carts.Remove(cart);
+            }
+            await _context.SaveChangesAsync();
+            return Ok();
+        }
+
         [HttpPatch("addproductquantity/{productid}")]
         public async Task<IActionResult> AddQuantity([FromBody] RemoveResources removeResources)
         {
