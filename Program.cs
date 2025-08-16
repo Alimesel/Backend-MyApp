@@ -65,10 +65,18 @@ builder.Services.AddCors(options =>
         });
 });
 
+// Configure Database
 builder.Services.AddDbContext<AppDbContext>(options =>
-options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 
 var app = builder.Build();
+
+// **Apply pending migrations automatically on startup**
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate(); // <-- this will apply all pending migrations
+}
 
 // Configure middleware
 if (!app.Environment.IsDevelopment())
@@ -84,7 +92,7 @@ app.UseRouting();
 // Use CORS policy
 app.UseCors("AllowAllOrigins");
 
-app.UseAuthentication(); // Ensure authentication is used
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllerRoute(
@@ -94,6 +102,7 @@ app.MapControllerRoute(
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
 public class JwtSettings{
     public string SigningKey { get; set; }
     public string Issuer { get; set; }
