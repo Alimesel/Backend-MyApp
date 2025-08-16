@@ -30,6 +30,10 @@ builder.Services.AddIdentity<User, IdentityRole<int>>(options =>
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("jwt").Get<JwtSettings>();
+if (string.IsNullOrEmpty(jwtSettings?.SigningKey))
+{
+    throw new Exception("JWT SigningKey is not configured!");
+}
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
