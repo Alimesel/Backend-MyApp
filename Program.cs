@@ -66,17 +66,13 @@ builder.Services.AddCors(options =>
 });
 
 // Configure Database
+var connectionString = builder.Configuration.GetConnectionString("Default") 
+    ?? Environment.GetEnvironmentVariable("DATABASE_URL");
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+    options.UseNpgsql(connectionString));
 
 var app = builder.Build();
-
-// **Apply pending migrations automatically on startup**
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate(); // <-- this will apply all pending migrations
-}
 
 // Configure middleware
 if (!app.Environment.IsDevelopment())

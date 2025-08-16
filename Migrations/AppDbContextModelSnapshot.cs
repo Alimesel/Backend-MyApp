@@ -170,7 +170,7 @@ namespace MyApp.Migrations
 
                     b.HasKey("CartId");
 
-                    b.ToTable("Carts");
+                    b.ToTable("Carts", (string)null);
                 });
 
             modelBuilder.Entity("MyApp.Core.Models.CartItems", b =>
@@ -200,7 +200,7 @@ namespace MyApp.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("CartItems");
+                    b.ToTable("CartItems", (string)null);
                 });
 
             modelBuilder.Entity("MyApp.Core.Models.Category", b =>
@@ -221,7 +221,7 @@ namespace MyApp.Migrations
 
                     b.HasKey("CategoryID");
 
-                    b.ToTable("Categories");
+                    b.ToTable("Categories", (string)null);
                 });
 
             modelBuilder.Entity("MyApp.Core.Models.Home", b =>
@@ -264,7 +264,7 @@ namespace MyApp.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Home");
+                    b.ToTable("Home", (string)null);
                 });
 
             modelBuilder.Entity("MyApp.Core.Models.OrderDetails", b =>
@@ -303,7 +303,7 @@ namespace MyApp.Migrations
 
                     b.HasIndex("OrderId");
 
-                    b.ToTable("OrderDetails");
+                    b.ToTable("OrderDetails", (string)null);
                 });
 
             modelBuilder.Entity("MyApp.Core.Models.Orders", b =>
@@ -325,7 +325,7 @@ namespace MyApp.Migrations
 
                     b.HasKey("OrderId");
 
-                    b.ToTable("Orders");
+                    b.ToTable("Orders", (string)null);
                 });
 
             modelBuilder.Entity("MyApp.Core.Models.Product", b =>
@@ -361,7 +361,7 @@ namespace MyApp.Migrations
 
                     b.HasIndex("CategoryID");
 
-                    b.ToTable("Products");
+                    b.ToTable("Products", (string)null);
                 });
 
             modelBuilder.Entity("MyApp.Core.Models.User", b =>
@@ -469,7 +469,7 @@ namespace MyApp.Migrations
 
                     b.HasKey("WishId");
 
-                    b.ToTable("WishLists");
+                    b.ToTable("WishLists", (string)null);
                 });
 
             modelBuilder.Entity("MyApp.Core.Models.WishlistItems", b =>
@@ -492,7 +492,7 @@ namespace MyApp.Migrations
 
                     b.HasIndex("WishId");
 
-                    b.ToTable("WishlistItems");
+                    b.ToTable("WishlistItems", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
