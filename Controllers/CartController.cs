@@ -43,70 +43,71 @@ namespace MyApp.Controllers
         }
 
         // Add Product To Cart
-        [HttpPost("AddToCart")]
-        public async Task<IActionResult> AddToCart([FromBody] CartResources cartResources)
+       [HttpPost("AddToCart")]
+public async Task<IActionResult> AddToCart([FromBody] CartResources cartResources)
+{
+    var userId = GetUserIdByToken();
+
+    // Try to get the user's cart with items
+    var cart = await _context.Carts
+        .Include(c => c.CartItems)
+        .ThenInclude(ci => ci.Products)
+        .FirstOrDefaultAsync(c => c.UserId == userId);
+
+    // If no cart exists, create a new one and save it immediately
+    if (cart == null)
+    {
+        cart = new Cart
         {
-            var userId = GetUserIdByToken();
+            UserId = userId,
+            CartItems = new List<CartItems>(),
+            CreatedAt = DateTime.Now
+        };
+        _context.Carts.Add(cart);
+        await _context.SaveChangesAsync(); // ✅ Save cart first to generate CartId
+    }
 
-            // Get existing cart or create a new one
-            var cart = await _context.Carts
-                .Include(c => c.CartItems)
-                .ThenInclude(ci => ci.Products)
-                .ThenInclude(p => p.Category)
-                .FirstOrDefaultAsync(c => c.UserId == userId);
+    // Find the product
+    var product = await _context.Products.FindAsync(cartResources.ProductId);
+    if (product == null)
+        return NotFound("Product not found");
 
-            if (cart == null)
-            {
-                cart = new Cart
-                {
-                    UserId = userId,
-                    CreatedAt = DateTime.Now
-                };
-                _context.Carts.Add(cart);
-            }
+    // Get all cart items of this product regardless of size
+    var existingCartItemsForProduct = cart.CartItems
+        .Where(ci => ci.ProductId == cartResources.ProductId)
+        .ToList();
 
-            // Ensure CartItems collection is initialized
-            if (cart.CartItems == null)
-                cart.CartItems = new List<CartItems>();
+    // Check total quantity across all sizes
+    int totalQuantityForProductInCart = existingCartItemsForProduct.Sum(ci => ci.Quantity);
+    if (totalQuantityForProductInCart + 1 > product.Quantity)
+        return BadRequest("Product stock is not enough");
 
-            // Find the product
-            var product = await _context.Products.FindAsync(cartResources.ProductId);
-            if (product == null)
-                return NotFound("Product not found");
+    // Check if a cart item exists for this size
+    var cartItem = existingCartItemsForProduct
+        .FirstOrDefault(ci => ci.Size == cartResources.Size);
 
-            // Check total quantity across all sizes
-            var existingCartItemsForProduct = cart.CartItems
-                .Where(ci => ci.ProductId == cartResources.ProductId)
-                .ToList();
+    if (cartItem == null)
+    {
+        // Add a new cart item for this size
+        cartItem = new CartItems
+        {
+            CartId = cart.CartId, // ✅ assign CartId explicitly
+            ProductId = cartResources.ProductId,
+            Quantity = 1,
+            Size = cartResources.Size
+        };
+        cart.CartItems.Add(cartItem);
+    }
+    else
+    {
+        // Increment quantity by 1
+        cartItem.Quantity++;
+    }
 
-            int totalQuantityForProductInCart = existingCartItemsForProduct.Sum(ci => ci.Quantity);
-            if (totalQuantityForProductInCart + 1 > product.Quantity)
-                return BadRequest("Product stock is not enough");
+    await _context.SaveChangesAsync();
 
-            // Check if a cart item exists for this size
-            var cartItem = existingCartItemsForProduct
-                .FirstOrDefault(ci => ci.Size == cartResources.Size);
-
-            if (cartItem == null)
-            {
-                // Add a new cart item
-                cartItem = new CartItems
-                {
-                    ProductId = cartResources.ProductId,
-                    Quantity = 1,
-                    Size = cartResources.Size
-                };
-                cart.CartItems.Add(cartItem);
-            }
-            else
-            {
-                // Increment quantity by 1
-                cartItem.Quantity++;
-            }
-
-            await _context.SaveChangesAsync();
-            return Ok(cart);
-        }
+    return Ok(cart);
+}
 
         // Remove Product From Cart
         [HttpPost("remove/{productId}")]
