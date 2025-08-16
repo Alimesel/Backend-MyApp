@@ -14,204 +14,194 @@ namespace MyApp.Controllers
     public class CartController : Controller
     {
         private readonly AppDbContext _context;
+
         public CartController(AppDbContext context)
         {
-            this._context = context;
+            _context = context;
         }
+
         private int GetUserIdByToken()
         {
             return int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
         }
+
         // Get Cart For Logged-in Users
         [HttpGet]
         public async Task<IActionResult> GetCart()
         {
-            var userid = this.GetUserIdByToken();
+            var userId = GetUserIdByToken();
             var cart = await _context.Carts
-            .Include(c => c.CartItems)
-            .ThenInclude(ci => ci.Products)
-            .ThenInclude(p => p.Category)
-            .FirstOrDefaultAsync(c => c.UserId == userid);
+                .Include(c => c.CartItems)
+                .ThenInclude(ci => ci.Products)
+                .ThenInclude(p => p.Category)
+                .FirstOrDefaultAsync(c => c.UserId == userId);
+
+            if (cart == null)
+                return Ok(new { CartItems = new List<object>() }); // empty cart
+
+            return Ok(cart);
+        }
+
+        // Add Product To Cart
+        [HttpPost("AddToCart")]
+        public async Task<IActionResult> AddToCart([FromBody] CartResources cartResources)
+        {
+            var userId = GetUserIdByToken();
+
+            // Get existing cart or create a new one
+            var cart = await _context.Carts
+                .Include(c => c.CartItems)
+                .ThenInclude(ci => ci.Products)
+                .ThenInclude(p => p.Category)
+                .FirstOrDefaultAsync(c => c.UserId == userId);
 
             if (cart == null)
             {
-                return Ok(new { CartItems = new List<Object>() });//empty Cart
+                cart = new Cart
+                {
+                    UserId = userId,
+                    CreatedAt = DateTime.Now
+                };
+                _context.Carts.Add(cart);
             }
+
+            // Ensure CartItems collection is initialized
+            if (cart.CartItems == null)
+                cart.CartItems = new List<CartItems>();
+
+            // Find the product
+            var product = await _context.Products.FindAsync(cartResources.ProductId);
+            if (product == null)
+                return NotFound("Product not found");
+
+            // Check total quantity across all sizes
+            var existingCartItemsForProduct = cart.CartItems
+                .Where(ci => ci.ProductId == cartResources.ProductId)
+                .ToList();
+
+            int totalQuantityForProductInCart = existingCartItemsForProduct.Sum(ci => ci.Quantity);
+            if (totalQuantityForProductInCart + 1 > product.Quantity)
+                return BadRequest("Product stock is not enough");
+
+            // Check if a cart item exists for this size
+            var cartItem = existingCartItemsForProduct
+                .FirstOrDefault(ci => ci.Size == cartResources.Size);
+
+            if (cartItem == null)
+            {
+                // Add a new cart item
+                cartItem = new CartItems
+                {
+                    ProductId = cartResources.ProductId,
+                    Quantity = 1,
+                    Size = cartResources.Size
+                };
+                cart.CartItems.Add(cartItem);
+            }
+            else
+            {
+                // Increment quantity by 1
+                cartItem.Quantity++;
+            }
+
+            await _context.SaveChangesAsync();
             return Ok(cart);
         }
-        // Add Product To Cart
-  [HttpPost("AddToCart")]
-public async Task<IActionResult> AddToCart([FromBody] CartResources cartResources)
-{
-    var userId = GetUserIdByToken();
-
-    // Try to get the user's cart with items
-    var cart = await _context.Carts
-        .Include(c => c.CartItems)
-        .ThenInclude(ci => ci.Products)
-        .ThenInclude(p => p.Category)
-        .FirstOrDefaultAsync(c => c.UserId == userId);
-
-    // If no cart exists, create a new one and add it to the context
-    if (cart == null)
-    {
-        cart = new Cart
-        {
-            UserId = userId,
-            CartItems = new List<CartItems>()
-        };
-        _context.Carts.Add(cart);
-    }
-
-    // Find the product
-    var product = await _context.Products.FindAsync(cartResources.ProductId);
-    if (product == null)
-    {
-        return NotFound("Product not found");
-    }
-
-    // Get all cart items of this product regardless of size
-    var existingCartItemsForProduct = cart.CartItems
-        .Where(ci => ci.ProductId == cartResources.ProductId)
-        .ToList();
-
-    // Check total quantity across all sizes
-    int totalQuantityForProductInCart = existingCartItemsForProduct.Sum(ci => ci.Quantity);
-
-    if (totalQuantityForProductInCart + 1 > product.Quantity)
-    {
-        return BadRequest("Product stock is not enough");
-    }
-
-    // Check if a cart item exists for this size
-    var cartItem = existingCartItemsForProduct
-        .FirstOrDefault(ci => ci.Size == cartResources.Size);
-
-    if (cartItem == null)
-    {
-        // Add a new cart item for this size
-        cartItem = new CartItems
-        {
-            ProductId = cartResources.ProductId,
-            Quantity = 1, // always 1
-            Size = cartResources.Size
-        };
-        cart.CartItems.Add(cartItem);
-    }
-    else
-    {
-        // Increment quantity by 1
-        cartItem.Quantity++;
-    }
-
-    await _context.SaveChangesAsync();
-
-    // Return the updated cart
-    return Ok(cart);
-}
-
 
         // Remove Product From Cart
         [HttpPost("remove/{productId}")]
         public async Task<IActionResult> RemoveFromCart([FromBody] RemoveResources removeResources)
         {
-            var userid = GetUserIdByToken();
+            var userId = GetUserIdByToken();
             var cart = await _context.Carts
                 .Include(c => c.CartItems)
-                .FirstOrDefaultAsync(c => c.UserId == userid);
+                .FirstOrDefaultAsync(c => c.UserId == userId);
 
             if (cart == null)
                 return NotFound("Cart Not Found");
-
-            var cartitem = cart.CartItems.FirstOrDefault(ci => ci.ProductId == removeResources.ProductId
-            && ci.Size == removeResources.Size);
-            if (cartitem == null)
-                return NotFound("Product Not Found");
-            cart.CartItems.Remove(cartitem);
-            if (!cart.CartItems.Any())
-            {
-                _context.Carts.Remove(cart);
-            }
-            await _context.SaveChangesAsync();
-            return Ok(cart);
-        }
-        // Decrease product quantity
-        [HttpPatch("productquantity/{productid}")]
-        public async Task<IActionResult> DecreaseQuantity([FromBody] RemoveResources removeResources)
-        {
-            var userid = GetUserIdByToken();
-            var cart = await _context.Carts
-            .Include(c => c.CartItems)
-            .ThenInclude(c => c.Products)
-            .FirstOrDefaultAsync(c => c.UserId == userid);
-            if (cart == null)
-            {
-                return NotFound("Cart Not Found");
-            }
-            var cartItems = cart.CartItems.FirstOrDefault(ci => ci.ProductId == removeResources.ProductId && ci.Size == removeResources.Size);
-            if (cartItems == null)
-            {
-                return NotFound("Product Not Found");
-            }
-            if (cartItems.Quantity > 1)
-            {
-                cartItems.Quantity = cartItems.Quantity - 1;
-            }
-            else
-            {
-                cart.CartItems.Remove(cartItems);
-            }
-            if (!cart.CartItems.Any())
-            {
-                _context.Carts.Remove(cart);
-            }
-            await _context.SaveChangesAsync();
-            return Ok();
-        }
-
-        [HttpPatch("addproductquantity/{productid}")]
-        public async Task<IActionResult> AddQuantity([FromBody] RemoveResources removeResources)
-        {
-            var userid = this.GetUserIdByToken();
-            var cart = await _context.Carts
-                .Include(c => c.CartItems)
-                .ThenInclude(c => c.Products)
-                .FirstOrDefaultAsync(c => c.UserId == userid);
-
-            if (cart == null)
-            {
-                return NotFound("Cart Not Found");
-            }
 
             var cartItem = cart.CartItems.FirstOrDefault(ci =>
                 ci.ProductId == removeResources.ProductId &&
                 ci.Size == removeResources.Size);
 
             if (cartItem == null)
-            {
-                return NotFound("Product Not Found in Cart");
-            }
+                return NotFound("Product Not Found");
 
-            // Get the product from the database
+            cart.CartItems.Remove(cartItem);
+
+            // Remove cart if empty
+            if (!cart.CartItems.Any())
+                _context.Carts.Remove(cart);
+
+            await _context.SaveChangesAsync();
+            return Ok(cart);
+        }
+
+        // Decrease product quantity
+        [HttpPatch("productquantity/{productId}")]
+        public async Task<IActionResult> DecreaseQuantity([FromBody] RemoveResources removeResources)
+        {
+            var userId = GetUserIdByToken();
+            var cart = await _context.Carts
+                .Include(c => c.CartItems)
+                .ThenInclude(ci => ci.Products)
+                .FirstOrDefaultAsync(c => c.UserId == userId);
+
+            if (cart == null)
+                return NotFound("Cart Not Found");
+
+            var cartItem = cart.CartItems.FirstOrDefault(ci =>
+                ci.ProductId == removeResources.ProductId &&
+                ci.Size == removeResources.Size);
+
+            if (cartItem == null)
+                return NotFound("Product Not Found");
+
+            if (cartItem.Quantity > 1)
+                cartItem.Quantity--;
+            else
+                cart.CartItems.Remove(cartItem);
+
+            if (!cart.CartItems.Any())
+                _context.Carts.Remove(cart);
+
+            await _context.SaveChangesAsync();
+            return Ok();
+        }
+
+        // Increase product quantity
+        [HttpPatch("addproductquantity/{productId}")]
+        public async Task<IActionResult> AddQuantity([FromBody] RemoveResources removeResources)
+        {
+            var userId = GetUserIdByToken();
+            var cart = await _context.Carts
+                .Include(c => c.CartItems)
+                .ThenInclude(ci => ci.Products)
+                .FirstOrDefaultAsync(c => c.UserId == userId);
+
+            if (cart == null)
+                return NotFound("Cart Not Found");
+
+            var cartItem = cart.CartItems.FirstOrDefault(ci =>
+                ci.ProductId == removeResources.ProductId &&
+                ci.Size == removeResources.Size);
+
+            if (cartItem == null)
+                return NotFound("Product Not Found in Cart");
+
             var product = await _context.Products.FindAsync(removeResources.ProductId);
             if (product == null)
-            {
                 return NotFound("Product Not Found");
-            }
 
-            // ✅ Calculate total quantity of the same product (across all sizes) in the cart
-            var totalQuantityForProduct = cart.CartItems
+            // Total quantity across all sizes
+            var totalQuantity = cart.CartItems
                 .Where(ci => ci.ProductId == removeResources.ProductId)
                 .Sum(ci => ci.Quantity);
 
-            if (totalQuantityForProduct + 1 > product.Quantity)
-            {
-                return BadRequest("Cannot add more. Product stock limit reached (across all sizes).");
-            }
+            if (totalQuantity + 1 > product.Quantity)
+                return BadRequest("Cannot add more. Product stock limit reached.");
 
-            // ✅ Safe to add
             cartItem.Quantity++;
-
             await _context.SaveChangesAsync();
             return Ok();
         }

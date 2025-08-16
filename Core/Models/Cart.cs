@@ -8,6 +8,6 @@ namespace MyApp.Core.Models
         public int CartId { get; set; }
         public int UserId { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.Now;
-        public ICollection<CartItems> CartItems{ get; set; }
+        public ICollection<CartItems> CartItems { get; set; } = new List<CartItems>();
     }
 }
