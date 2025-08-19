@@ -62,7 +62,9 @@ namespace MyApp.Controllers
                     UserId = userId.Value,
                     WishlistItems = new List<WishlistItems>()
                 };
-                await _context.WishLists.AddAsync(wishList);
+                 _context.WishLists.AddAsync(wishList);
+                await _context.SaveChangesAsync();
+
             }
 
             // Check if product exists
