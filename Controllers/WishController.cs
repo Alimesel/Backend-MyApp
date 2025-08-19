@@ -64,8 +64,8 @@ namespace MyApp.Controllers
                     UserId = userId.Value,
                     WishlistItems = new List<WishlistItems>()
                 };
-                await _context.WishLists.AddAsync(wishList); // ✅ fixed: await here
-                await _context.SaveChangesAsync();
+                await _context.WishLists.AddAsync(wishList);
+                await _context.SaveChangesAsync(); // ensures WishId is generated
             }
 
             // Validate product
@@ -77,10 +77,14 @@ namespace MyApp.Controllers
             if (wishList.WishlistItems.Any(wi => wi.ProductId == productId))
                 return BadRequest("Product already exists in wishlist.");
 
-            // Add new item
-            var wishlistItem = new WishlistItems { ProductId = productId, WishId = wishList.WishId };
-            wishList.WishlistItems.Add(wishlistItem);
+            // ✅ Use navigation property instead of WishId
+            var wishlistItem = new WishlistItems
+            {
+                ProductId = productId,
+                WishList = wishList
+            };
 
+            await _context.WishlistItems.AddAsync(wishlistItem);
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Product added to wishlist." });
@@ -94,24 +98,25 @@ namespace MyApp.Controllers
                 return Unauthorized("User ID claim not found.");
 
             var wishList = await _context.WishLists
-                .Include(w => w.WishlistItems)
                 .FirstOrDefaultAsync(w => w.UserId == userId.Value);
 
             if (wishList == null)
                 return NotFound("Wishlist not found.");
 
-            var wishlistItem = wishList.WishlistItems.FirstOrDefault(wi => wi.ProductId == productId);
+            var wishlistItem = await _context.WishlistItems
+                .FirstOrDefaultAsync(wi => wi.ProductId == productId && wi.WishId == wishList.WishId);
+
             if (wishlistItem == null)
                 return NotFound("Product not found in wishlist.");
 
-            // Remove item
             _context.WishlistItems.Remove(wishlistItem);
-            wishList.WishlistItems.Remove(wishlistItem);
-
             await _context.SaveChangesAsync();
 
-            // ✅ If empty, delete wishlist too
-            if (!wishList.WishlistItems.Any())
+            // Check DB if wishlist is empty
+            var remainingItems = await _context.WishlistItems
+                .AnyAsync(wi => wi.WishId == wishList.WishId);
+
+            if (!remainingItems)
             {
                 _context.WishLists.Remove(wishList);
                 await _context.SaveChangesAsync();
