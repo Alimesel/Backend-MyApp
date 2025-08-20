@@ -125,7 +125,7 @@ public string generateToken(User user)
     var token = new JwtSecurityToken(
         issuer: configuration["jwt:Issuer"],
         audience: configuration["jwt:Audience"],
-        expires: DateTime.UtcNow.AddMinutes(30), // Token expiration time
+        expires: DateTime.UtcNow.AddDays(7), // Token expiration time
         claims: claims,
         signingCredentials: credentials
     );
