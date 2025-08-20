@@ -42,12 +42,11 @@ public async Task<IEnumerable<ProductResources>> GetProducts(
     if (categoryId.HasValue)
         query = query.Where(p => p.CategoryID == categoryId.Value);
 
-    if (!string.IsNullOrWhiteSpace(searchTerm))
-    {
-        var trimmed = searchTerm.Trim();
-        query = query.Where(p =>
-            EF.Functions.ILike(p.Name, $"%{trimmed}%") ||
-            EF.Functions.ILike(p.Description, $"%{trimmed}%"));
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var Normalized = searchTerm.Trim().ToLower();
+                query = query.Where(p => p.Name.ToLower().Contains(Normalized)
+                || p.Description.ToLower().Contains(Normalized)); 
     }
 
     var products = await query.ToListAsync();
