@@ -34,8 +34,8 @@ public class CheckoutController : ControllerBase
         if (request == null || request.CartItems == null || !request.CartItems.Any())
             return BadRequest("Cart is empty.");
 
-        var successUrl = "https://abbali-my-fashion.vercel.app/payment-success";
-        var cancelUrl = "https://abbali-my-fashion.vercel.app/cart";
+        var successUrl = "https://abbali.vercel.app/payment-success";
+        var cancelUrl = "https://abbali.vercel.app/cart";
 
         var sessionId = await _stripeService.CreateCheckOutSession(
             request.CartItems.ToList(), request.UserId, successUrl, cancelUrl);
