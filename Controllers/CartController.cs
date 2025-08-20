@@ -40,92 +40,163 @@ namespace MyApp.Controllers
             return Ok(cart);
         }
         // Add Product To Cart
-[HttpPost("AddToCart")]
-public async Task<IActionResult> AddToCart([FromBody] CartResources cartResources)
+        [HttpPost("AddToCart")]
+        public async Task<IActionResult> AddToCart([FromBody] CartResources cartResources)
+        {
+            try
+            {
+                var userid = this.GetUserIdByToken();
+
+                // Start a transaction
+                using var transaction = await _context.Database.BeginTransactionAsync();
+
+                try
+                {
+                    var cart = await _context.Carts
+                        .Include(c => c.CartItems)
+                        .FirstOrDefaultAsync(c => c.UserId == userid);
+
+                    if (cart == null)
+                    {
+                        cart = new Cart
+                        {
+                            UserId = userid,
+                            CartItems = new List<CartItems>(),
+                            CreatedAt = DateTime.UtcNow // Use UTC for consistency
+                        };
+                        _context.Carts.Add(cart); // Explicitly add new cart
+                        await _context.SaveChangesAsync(); // Save to generate CartId
+                    }
+
+                    var product = await _context.Products.FindAsync(cartResources.ProductId);
+                    if (product == null)
+                    {
+                        await transaction.RollbackAsync();
+                        return NotFound("Product not found");
+                    }
+
+                    // Rest of your existing logic for cart items...
+                    var existingCartItemsForProduct = cart.CartItems
+                        .Where(ci => ci.ProductId == cartResources.ProductId)
+                        .ToList();
+
+                    int totalQuantityForProductInCart = existingCartItemsForProduct.Sum(ci => ci.Quantity);
+
+                    if (totalQuantityForProductInCart + 1 > product.Quantity)
+                    {
+                        await transaction.RollbackAsync();
+                        return BadRequest("Product quantity is not enough");
+                    }
+
+                    var cartitem = existingCartItemsForProduct.FirstOrDefault(ci => ci.Size == cartResources.Size);
+
+                    if (cartitem == null)
+                    {
+                        cartitem = new CartItems
+                        {
+                            ProductId = cartResources.ProductId,
+                            Quantity = 1,
+                            Size = cartResources.Size,
+                            CartId = cart.CartId // Ensure this is set
+                        };
+                        cart.CartItems.Add(cartitem);
+                    }
+                    else
+                    {
+                        cartitem.Quantity++;
+                    }
+
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    return Ok(cart);
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    // Log the error
+                    Console.WriteLine($"Error in AddToCart: {ex.Message}\n{ex.StackTrace}");
+                    return StatusCode(500, "An error occurred while processing your request");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log the error
+                Console.WriteLine($"Error in AddToCart (outer): {ex.Message}\n{ex.StackTrace}");
+                return StatusCode(500, "An error occurred while processing your request");
+            }
+        }
+[HttpPost("AddMultipleToCart")]
+public async Task<IActionResult> AddMultipleToCart([FromBody] List<CartResources> cartResourcesList)
 {
+    var userid = this.GetUserIdByToken();
+
+    using var transaction = await _context.Database.BeginTransactionAsync();
     try
     {
-        var userid = this.GetUserIdByToken();
+        var cart = await _context.Carts
+            .Include(c => c.CartItems)
+            .FirstOrDefaultAsync(c => c.UserId == userid);
 
-        // Start a transaction
-        using var transaction = await _context.Database.BeginTransactionAsync();
-
-        try
+        if (cart == null)
         {
-            var cart = await _context.Carts
-                .Include(c => c.CartItems)
-                .FirstOrDefaultAsync(c => c.UserId == userid);
-
-            if (cart == null)
+            cart = new Cart
             {
-                cart = new Cart 
-                { 
-                    UserId = userid, 
-                    CartItems = new List<CartItems>(),
-                    CreatedAt = DateTime.UtcNow // Use UTC for consistency
-                };
-                _context.Carts.Add(cart); // Explicitly add new cart
-                await _context.SaveChangesAsync(); // Save to generate CartId
-            }
+                UserId = userid,
+                CartItems = new List<CartItems>(),
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.Carts.Add(cart);
+            await _context.SaveChangesAsync();
+        }
 
+        foreach (var cartResources in cartResourcesList)
+        {
             var product = await _context.Products.FindAsync(cartResources.ProductId);
-            if (product == null)
-            {
-                await transaction.RollbackAsync();
-                return NotFound("Product not found");
-            }
+            if (product == null) continue; // Skip invalid products
 
-            // Rest of your existing logic for cart items...
             var existingCartItemsForProduct = cart.CartItems
                 .Where(ci => ci.ProductId == cartResources.ProductId)
                 .ToList();
 
             int totalQuantityForProductInCart = existingCartItemsForProduct.Sum(ci => ci.Quantity);
 
-            if (totalQuantityForProductInCart + 1 > product.Quantity)
-            {
-                await transaction.RollbackAsync();
-                return BadRequest("Product quantity is not enough");
-            }
+            if (totalQuantityForProductInCart + cartResources.Quantity > product.Quantity)
+                continue; // Skip if quantity exceeds stock
 
-            var cartitem = existingCartItemsForProduct.FirstOrDefault(ci => ci.Size == cartResources.Size);
+            var cartItem = existingCartItemsForProduct
+                .FirstOrDefault(ci => ci.Size == cartResources.Size);
 
-            if (cartitem == null)
+            if (cartItem == null)
             {
-                cartitem = new CartItems
+                cartItem = new CartItems
                 {
                     ProductId = cartResources.ProductId,
-                    Quantity = 1,
+                    Quantity = cartResources.Quantity,
                     Size = cartResources.Size,
-                    CartId = cart.CartId // Ensure this is set
+                    CartId = cart.CartId
                 };
-                cart.CartItems.Add(cartitem);
+                cart.CartItems.Add(cartItem);
             }
             else
             {
-                cartitem.Quantity++;
+                cartItem.Quantity += cartResources.Quantity;
             }
-
-            await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
-
-            return Ok(cart);
         }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync();
-            // Log the error
-            Console.WriteLine($"Error in AddToCart: {ex.Message}\n{ex.StackTrace}");
-            return StatusCode(500, "An error occurred while processing your request");
-        }
+
+        await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        return Ok(cart);
     }
     catch (Exception ex)
     {
-        // Log the error
-        Console.WriteLine($"Error in AddToCart (outer): {ex.Message}\n{ex.StackTrace}");
+        await transaction.RollbackAsync();
+        Console.WriteLine($"Error in AddMultipleToCart: {ex.Message}\n{ex.StackTrace}");
         return StatusCode(500, "An error occurred while processing your request");
     }
 }
+
 
         // Remove Product From Cart
         [HttpPost("remove/{productId}")]
