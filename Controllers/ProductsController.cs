@@ -32,25 +32,29 @@ namespace MyApp.Controllers
         }
 
         // GET: api/Products/products
-        [HttpGet("products")]
-        public async Task<IEnumerable<ProductResources>> GetProducts(
-            [FromQuery] int? categoryId = null,
-            [FromQuery] string? searchTerm = null) // Nullable string
-        {
-            IQueryable<Product> query = _context.Products.Include(p => p.Category);
+       [HttpGet("products")]
+public async Task<IEnumerable<ProductResources>> GetProducts(
+    [FromQuery] int? categoryId = null,
+    [FromQuery] string? searchTerm = null)
+{
+    IQueryable<Product> query = _context.Products.Include(p => p.Category);
 
-            if (categoryId.HasValue)
-                query = query.Where(p => p.CategoryID == categoryId.Value);
+    if (categoryId.HasValue)
+        query = query.Where(p => p.CategoryID == categoryId.Value);
 
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-                query = query.Where(p =>
-                    p.Name.Contains(searchTerm.Trim()) ||
-                    p.Description.Contains(searchTerm.Trim()));
+    if (!string.IsNullOrWhiteSpace(searchTerm))
+    {
+        var trimmed = searchTerm.Trim();
+        query = query.Where(p =>
+            EF.Functions.ILike(p.Name, $"%{trimmed}%") ||
+            EF.Functions.ILike(p.Description, $"%{trimmed}%"));
+    }
 
-            var products = await query.ToListAsync();
-            var productResources = _mapper.Map<List<Product>, List<ProductResources>>(products);
-            return productResources;
-        }
+    var products = await query.ToListAsync();
+    var productResources = _mapper.Map<List<Product>, List<ProductResources>>(products);
+    return productResources;
+}
+
 
         // GET: api/Products/category
         [HttpGet("category")]
