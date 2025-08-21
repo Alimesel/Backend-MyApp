@@ -240,19 +240,15 @@ namespace MyApp.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("ImageUrl")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("ImageUrl2")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("ImageUrl3")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("ImageUrl4")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<bool>("IsActive")
