@@ -42,37 +42,33 @@ namespace MyApp.Controllers
             }
             return BadRequest("Invalid Password");
         }
+[HttpPost("register")]
+public async Task<IActionResult> Register([FromBody] RegisterResources registerResources)
+{
+    if (await usermanager.FindByNameAsync(registerResources.UserName) != null)
+        return BadRequest("Username already exists");
 
-        [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterResources registerResources)
-        {
-           
-             var user = await usermanager.FindByNameAsync(registerResources.UserName);
-             if(user!= null){
-                return BadRequest("Username already exists");
-            }
-             user = new User
-            {
-                UserName = registerResources.UserName,
-                Email = registerResources.Email,
-                FirstName = registerResources.FirstName,
-                LastName = registerResources.LastName,
-                PhoneNumber = registerResources.PhoneNumber,
-                Country = registerResources.Country,
-                City = registerResources.City
-            };
+    if (await usermanager.FindByEmailAsync(registerResources.Email) != null)
+        return BadRequest("Email already exists");
 
-            var result = await usermanager.CreateAsync(user, registerResources.Password);
+    var user = new User
+    {
+        UserName = registerResources.UserName,
+        Email = registerResources.Email,
+        FirstName = registerResources.FirstName,
+        LastName = registerResources.LastName,
+        PhoneNumber = registerResources.PhoneNumber,
+        Country = registerResources.Country,
+        City = registerResources.City
+    };
 
-            if (result.Succeeded)
-            {
-               var token = generateToken(user);
-              
-               return Ok(new {Token = token});
-            }
-            return BadRequest("Failed to Register");
+    var result = await usermanager.CreateAsync(user, registerResources.Password);
+    if (!result.Succeeded) return BadRequest("Failed to register");
 
-        }
+    var token = generateToken(user);
+    return Ok(new { Token = token });
+}
+
        [HttpPut("update")]
 public async Task<IActionResult> Update([FromBody] UserDTO userdto)
 {
