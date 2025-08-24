@@ -80,32 +80,42 @@
             return Ok(new { Token = token });
         }
 
-        [HttpPut("update")]
-        public async Task<IActionResult> Update([FromBody] UserDTO userdto)
-        {
-            var user = await usermanager.FindByIdAsync(userdto.Id.ToString());
-            if (user == null)
-            {
-                return NotFound("User not found");
-            }
+       [HttpPut("update")]
+public async Task<IActionResult> Update([FromBody] UserDTO userdto)
+{
+    var user = await usermanager.FindByIdAsync(userdto.Id.ToString());
+    if (user == null)
+        return NotFound("User not found");
 
-            // Update user properties
-            user.FirstName = userdto.Firstname;
-            user.LastName = userdto.LastName;
-            user.Email = userdto.Email;
-            user.PhoneNumber = userdto.PhoneNumber;
-            user.Country = userdto.Country;
-            user.City = userdto.City;
+    // Check if email already exists for another user
+    var existingEmailUser = await usermanager.Users
+        .FirstOrDefaultAsync(u => u.Email == userdto.Email && u.Id != user.Id);
+    if (existingEmailUser != null)
+        return BadRequest("Email already exists");
 
-            var result = await usermanager.UpdateAsync(user);
-            if (result.Succeeded)
-            {
-                var updatedUser = mapper.Map<User, UserDTO>(user);
-                return Ok(updatedUser);
-            }
+    // Check if phone number already exists for another user
+    var existingPhoneUser = await usermanager.Users
+        .FirstOrDefaultAsync(u => u.PhoneNumber == userdto.PhoneNumber && u.Id != user.Id);
+    if (existingPhoneUser != null)
+        return BadRequest("Phone number already exists");
 
-            return BadRequest("Failed to update user");
-        }
+    // Update user properties
+    user.FirstName = userdto.Firstname;
+    user.LastName = userdto.LastName;
+    user.Email = userdto.Email;
+    user.PhoneNumber = userdto.PhoneNumber;
+    user.Country = userdto.Country;
+    user.City = userdto.City;
+
+    var result = await usermanager.UpdateAsync(user);
+    if (result.Succeeded)
+    {
+        var updatedUser = mapper.Map<User, UserDTO>(user);
+        return Ok(updatedUser);
+    }
+
+    return BadRequest("Failed to update user");
+}
 
 
         public string generateToken(User user)
